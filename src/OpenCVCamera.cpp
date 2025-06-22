@@ -2,7 +2,7 @@
 #include "Logger.hpp"
 
 bool OpenCVCamera::open() {
-    bool status = cap.open(0);
+    bool status = cap.open(0, cv::CAP_LIBCAMERA);
     if (!status) {
         log(LogLevel::ERROR, "Failed to open camera. Ensure camera is connected and permissions are correct.");
         return false;
