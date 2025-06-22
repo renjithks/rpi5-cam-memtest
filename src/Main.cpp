@@ -2,6 +2,7 @@
 #include "Logger.hpp"
 #include <csignal>
 #include <iostream>
+#include <thread>
 
 LibcameraCamera camera;
 bool running = true;
