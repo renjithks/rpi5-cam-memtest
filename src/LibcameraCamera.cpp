@@ -6,15 +6,11 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <cstring>
-#include <libcamera/logging.h>
 
 using namespace libcamera;
 
 bool LibcameraCamera::initialize() {
     ScopedTimer timer("Camera Initialization");
-
-    logSetTarget(LogTargetConsole);
-    logSetLevel("*", LogLevelDebug);
 
     cameraManager_ = std::make_unique<CameraManager>();
     cameraManager_->start();
@@ -52,7 +48,7 @@ bool LibcameraCamera::initialize() {
             log(LogLevel::ERROR, "Failed to attach buffer to request");
             continue;
         }
-        log(LogLevel::DEBUG, "Buffer attached successfully");
+        log(LogLevel::INFO, "Buffer attached successfully");
         requests_.push_back(std::move(request));
     }
 
@@ -103,7 +99,7 @@ void LibcameraCamera::requestComplete(Request *request) {
             continue;
         }
         const FrameBuffer::Plane &plane = buffer->planes()[0];
-        log(LogLevel::DEBUG, "Planes count: %zu, length: %u", buffer->planes().size(), plane.length);
+        log(LogLevel::INFO, "Planes count: %zu, length: %u", buffer->planes().size(), plane.length);
 
         void *memory = mmap(nullptr, plane.length, PROT_READ, MAP_SHARED, plane.fd.get(), 0);
         if (memory == MAP_FAILED) {
