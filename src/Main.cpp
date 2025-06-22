@@ -1,48 +1,30 @@
-#include "CameraInterface.hpp"
-#include "OpenCVCamera.hpp"
-#include "FrameProcessor.hpp"
-#include "MemoryManager.hpp"
-#include "Profiler.hpp"
-#include "Logger.hpp"
+#include "LibcameraCamera.hpp"
+#include <csignal>
 #include <iostream>
-#include <thread>
-#include <cstring>
-#include <fstream>
+
+LibcameraCamera camera;
+bool running = true;
+
+void signalHandler(int signum) {
+    std::cout << "\n[INFO] Interrupt signal received. Exiting...\n";
+    running = false;
+}
 
 int main() {
-    OpenCVCamera camera;
-    FrameProcessor processor;
-    MemoryManager memManager;
-    std::ofstream csvLog("frame_log.csv");
-    csvLog << "Frame,AllocSize\n";
+    signal(SIGINT, signalHandler);
 
-    if (!camera.open()) {
-        return 1;
+    if (!camera.initialize()) {
+        std::cerr << "[ERROR] Camera initialization failed\n";
+        return -1;
     }
 
-    for (int i = 0; i < 300; ++i) {
-        ScopedTimer frameTimer("Frame " + std::to_string(i));
-
-        cv::Mat frame, gray;
-        if (!camera.readFrame(frame)) {
-            log(LogLevel::ERROR, "Frame read failed");
-            break;
-        }
-
-        processor.process(frame, gray);
-
-        size_t allocSize = gray.total();
-        uint8_t* buffer = memManager.allocate(allocSize);
-        std::memcpy(buffer, gray.data, allocSize);
-
-        log(LogLevel::INFO, "Frame " + std::to_string(i) + ", Allocated: " + std::to_string(allocSize) + " bytes");
-        csvLog << i << "," << allocSize << "\n";
-
-        memManager.free(buffer);
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    std::cout << "[INFO] Camera initialized. Press Ctrl+C to exit.\n";
+    while (running) {
+        // Just looping until interrupted
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    camera.close();
-    csvLog.close();
+    camera.shutdown();
+    std::cout << "[INFO] Camera shutdown completed.\n";
     return 0;
 }
