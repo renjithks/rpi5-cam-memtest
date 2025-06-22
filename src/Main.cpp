@@ -2,24 +2,30 @@
 #include "OpenCVCamera.hpp"
 #include "FrameProcessor.hpp"
 #include "MemoryManager.hpp"
+#include "Profiler.hpp"
+#include "Logger.hpp"
 #include <iostream>
 #include <thread>
 #include <cstring>
+#include <fstream>
 
 int main() {
     OpenCVCamera camera;
     FrameProcessor processor;
     MemoryManager memManager;
+    std::ofstream csvLog("frame_log.csv");
+    csvLog << "Frame,AllocSize\n";
 
     if (!camera.open()) {
-        std::cerr << "Failed to open camera\n";
         return 1;
     }
 
     for (int i = 0; i < 300; ++i) {
+        ScopedTimer frameTimer("Frame " + std::to_string(i));
+
         cv::Mat frame, gray;
         if (!camera.readFrame(frame)) {
-            std::cerr << "Frame read failed\n";
+            log(LogLevel::ERROR, "Frame read failed");
             break;
         }
 
@@ -29,12 +35,13 @@ int main() {
         uint8_t* buffer = memManager.allocate(allocSize);
         std::memcpy(buffer, gray.data, allocSize);
 
-        std::cout << "[INFO] Frame " << i << ", Allocated: " << allocSize << " bytes\n";
+        log(LogLevel::INFO, "Frame " + std::to_string(i) + ", Allocated: " + std::to_string(allocSize) + " bytes");
+        csvLog << i << "," << allocSize << "\n";
 
         memManager.free(buffer);
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
     camera.close();
+    csvLog.close();
     return 0;
-}

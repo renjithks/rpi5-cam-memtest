@@ -7,3 +7,4 @@ Makefile
 *.so
 *.swp
 *.log
+*.csv
