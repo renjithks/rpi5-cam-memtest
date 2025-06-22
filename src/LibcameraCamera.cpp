@@ -14,9 +14,6 @@ using namespace libcamera;
 bool LibcameraCamera::initialize() {
     ScopedTimer timer("Camera Initialization");
 
-    logSetTarget(LogTargetConsole);
-    logSetLevel("*", LogLevelDebug);
-
     cameraManager_ = std::make_unique<CameraManager>();
     cameraManager_->start();
 
