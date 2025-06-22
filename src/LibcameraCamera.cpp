@@ -3,7 +3,6 @@
 #include "Profiler.hpp"
 #include <libcamera/control_ids.h>
 #include <libcamera/formats.h>
-#include <libcamera/base/log.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <cstring>
@@ -96,11 +95,11 @@ void LibcameraCamera::shutdown() {
 
 void LibcameraCamera::requestComplete(Request *request) {
     if (request->status() == Request::RequestCancelled) {
-        log(LogLevel::WARNING, "Request was cancelled");
+        log(LogLevel::WARN, "Request was cancelled");
         return;
     }
 
-    const std::map<Stream *, FrameBuffer *> &buffers = request->buffers();
+    const std::map<const Stream *, FrameBuffer *> &buffers = request->buffers();
     for (auto &[stream, buffer] : buffers) {
         if (buffer->planes().empty()) {
             log(LogLevel::ERROR, "No planes in buffer");
