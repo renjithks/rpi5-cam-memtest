@@ -17,5 +17,5 @@ add_executable(camera_memtest
 )
 
 find_library(LIBCAMERA_LIB camera)
-target_link_libraries(camera_memtest ${LIBCAMERA_LIB})
-
+find_library(LIBCAMERA_BASE_LIB camera-base)
+target_link_libraries(camera_memtest ${OpenCV_LIBS} ${LIBCAMERA_LIB} ${LIBCAMERA_BASE_LIB})
