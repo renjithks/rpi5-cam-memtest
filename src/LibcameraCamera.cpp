@@ -6,11 +6,16 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <cstring>
+#include <libcamera/logging.h>
+#include <sstream>
 
 using namespace libcamera;
 
 bool LibcameraCamera::initialize() {
     ScopedTimer timer("Camera Initialization");
+
+    logSetTarget(LogTargetConsole);
+    logSetLevel("*", LogLevelDebug);
 
     cameraManager_ = std::make_unique<CameraManager>();
     cameraManager_->start();
@@ -99,7 +104,11 @@ void LibcameraCamera::requestComplete(Request *request) {
             continue;
         }
         const FrameBuffer::Plane &plane = buffer->planes()[0];
-        log(LogLevel::INFO, "Planes count: %zu, length: %u", buffer->planes().size(), plane.length);
+
+        std::ostringstream msg;
+        msg << "Planes count: " << buffer->planes().size()
+            << ", length: " << plane.length;
+        log(LogLevel::INFO, msg.str());
 
         void *memory = mmap(nullptr, plane.length, PROT_READ, MAP_SHARED, plane.fd.get(), 0);
         if (memory == MAP_FAILED) {
