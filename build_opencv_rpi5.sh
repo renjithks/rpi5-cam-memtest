@@ -31,8 +31,9 @@ cmake -D CMAKE_BUILD_TYPE=RELEASE \
       -D CMAKE_INSTALL_PREFIX=/usr/local \
       -D OPENCV_EXTRA_MODULES_PATH=~/opencv_contrib/modules \
       -D ENABLE_NEON=ON \
-      -D WITH_LIBV4L=ON \
+      -D WITH_V4L=ON \
       -D WITH_GSTREAMER=ON \
+      -D WITH_LIBCAMERA=ON \
       -D WITH_OPENGL=ON \
       -D BUILD_EXAMPLES=OFF ..
 
