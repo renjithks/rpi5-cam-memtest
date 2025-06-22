@@ -49,7 +49,7 @@ bool LibcameraCamera::initialize() {
         }
 
     for (StreamConfiguration &cfg : *config_) {
-        for (std::unique_ptr<FrameBuffer> &buffer : allocator_->buffers(cfg.stream())) {
+        for (const std::unique_ptr<FrameBuffer> &buffer : allocator_->buffers(cfg.stream())) {
             std::unique_ptr<Request> request = camera_->createRequest();
             request->addBuffer(cfg.stream(), buffer.get());
             requests_.push_back(std::move(request));
@@ -76,7 +76,7 @@ void LibcameraCamera::requestComplete(Request *request) {
     for (auto &[stream, buffer] : request->buffers()) {
         const FrameMetadata &metadata = buffer->metadata();
         const FrameBuffer::Plane &plane = buffer->planes()[0];
-        int fd = plane.fd.fd();
+        int fd = plane.fd.get();
         void *mem = mmap(nullptr, plane.length, PROT_READ, MAP_SHARED, fd, 0);
         if (mem != MAP_FAILED) {
             cv::Mat yuv(480 * 3 / 2, 640, CV_8UC1, mem);
