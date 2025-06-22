@@ -6,17 +6,18 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <cstring>
+#include <libcamera/logging.h>
 
 using namespace libcamera;
 
 bool LibcameraCamera::initialize() {
     ScopedTimer timer("Camera Initialization");
 
+    logSetTarget(LogTargetConsole);
+    logSetLevel("*", LogLevelDebug);
+
     cameraManager_ = std::make_unique<CameraManager>();
-    if (cameraManager_->start()) {
-        log(LogLevel::ERROR, "Failed to start CameraManager");
-        return false;
-    }
+    cameraManager_->start();
 
     if (cameraManager_->cameras().empty()) {
         log(LogLevel::ERROR, "No camera found");
@@ -24,20 +25,14 @@ bool LibcameraCamera::initialize() {
     }
 
     camera_ = cameraManager_->cameras()[0];
-    if (camera_->acquire()) {
-        log(LogLevel::ERROR, "Failed to acquire camera");
-        return false;
-    }
+    camera_->acquire();
 
     config_ = camera_->generateConfiguration({ StreamRole::Viewfinder });
-    config_->at(0).pixelFormat = formats::YUV420;
+    config_->at(0).pixelFormat = formats::YUYV;
     config_->at(0).size.width = 640;
     config_->at(0).size.height = 480;
     config_->validate();
-    if (camera_->configure(config_.get())) {
-        log(LogLevel::ERROR, "Failed to configure camera");
-        return false;
-    }
+    camera_->configure(config_.get());
 
     allocator_ = std::make_unique<FrameBufferAllocator>(camera_);
     Stream *stream = config_->at(0).stream();
@@ -52,22 +47,27 @@ bool LibcameraCamera::initialize() {
             log(LogLevel::ERROR, "Failed to create request");
             continue;
         }
-        if (request->addBuffer(stream, buffer.get()) < 0) {
+        int ret = request->addBuffer(stream, buffer.get());
+        if (ret < 0) {
             log(LogLevel::ERROR, "Failed to attach buffer to request");
             continue;
         }
+        log(LogLevel::DEBUG, "Buffer attached successfully");
         requests_.push_back(std::move(request));
     }
 
     camera_->requestCompleted.connect(this, &LibcameraCamera::requestComplete);
 
-    if (camera_->start()) {
+    if (camera_->start() < 0) {
         log(LogLevel::ERROR, "Failed to start camera");
         return false;
     }
 
-    for (auto &req : requests_)
-        camera_->queueRequest(req.get());
+    for (auto &req : requests_) {
+        if (camera_->queueRequest(req.get()) < 0) {
+            log(LogLevel::ERROR, "Failed to queue request");
+        }
+    }
 
     log(LogLevel::INFO, "Camera started successfully");
     return true;
@@ -84,12 +84,9 @@ bool LibcameraCamera::captureFrame(cv::Mat &output) {
 
 void LibcameraCamera::shutdown() {
     log(LogLevel::INFO, "Shutting down camera");
-    if (camera_)
-        camera_->stop();
-    if (camera_)
-        camera_->release();
-    if (cameraManager_)
-        cameraManager_->stop();
+    camera_->stop();
+    camera_->release();
+    cameraManager_->stop();
     log(LogLevel::INFO, "Camera shutdown completed.");
 }
 
@@ -99,34 +96,31 @@ void LibcameraCamera::requestComplete(Request *request) {
         return;
     }
 
-    const std::map<const Stream *, FrameBuffer *> &buffers = request->buffers();
+    const auto &buffers = request->buffers();
     for (auto &[stream, buffer] : buffers) {
         if (buffer->planes().empty()) {
             log(LogLevel::ERROR, "No planes in buffer");
             continue;
         }
-
         const FrameBuffer::Plane &plane = buffer->planes()[0];
+        log(LogLevel::DEBUG, "Planes count: %zu, length: %u", buffer->planes().size(), plane.length);
+
         void *memory = mmap(nullptr, plane.length, PROT_READ, MAP_SHARED, plane.fd.get(), 0);
         if (memory == MAP_FAILED) {
             log(LogLevel::ERROR, "mmap failed");
             continue;
         }
 
-        try {
-            cv::Mat yuv(480 + 480 / 2, 640, CV_8UC1, memory);
-            cv::Mat bgr;
-            cv::cvtColor(yuv, bgr, cv::COLOR_YUV2BGR_I420);
+        cv::Mat yuyv(480, 640, CV_8UC2, memory);
+        cv::Mat bgr;
+        cv::cvtColor(yuyv, bgr, cv::COLOR_YUV2BGR_YUYV);
 
-            {
-                std::lock_guard<std::mutex> lock(frameMutex_);
-                latestFrame_ = bgr.clone();
-                frameReady_ = true;
-            }
-            frameCondVar_.notify_one();
-        } catch (const std::exception &e) {
-            log(LogLevel::ERROR, std::string("Exception during frame conversion: ") + e.what());
+        {
+            std::lock_guard<std::mutex> lock(frameMutex_);
+            latestFrame_ = bgr.clone();
+            frameReady_ = true;
         }
+        frameCondVar_.notify_one();
 
         munmap(memory, plane.length);
     }
