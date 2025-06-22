@@ -1,5 +1,6 @@
-// LibcameraCamera.cpp
 #include "LibcameraCamera.hpp"
+#include "Logger.hpp"
+#include "Profiler.hpp"
 #include <libcamera/libcamera.h>
 #include <libcamera/camera_manager.h>
 #include <libcamera/framebuffer_allocator.h>
@@ -15,17 +16,18 @@
 using namespace libcamera;
 
 bool LibcameraCamera::initialize() {
+    ScopedTimer timer("Camera Initialization");
     cameraManager_ = std::make_unique<CameraManager>();
     cameraManager_->start();
 
     if (cameraManager_->cameras().empty()) {
-        std::cerr << "[ERROR] No camera found\n";
+        log(LogLevel::ERROR, "No camera found");
         return false;
     }
 
     camera_ = cameraManager_->cameras()[0];
     if (camera_->acquire()) {
-        std::cerr << "[ERROR] Failed to acquire camera\n";
+        log(LogLevel::ERROR, "Failed to acquire camera");
         return false;
     }
 
@@ -35,14 +37,14 @@ bool LibcameraCamera::initialize() {
     config_->validate();
 
     if (camera_->configure(config_.get()) < 0) {
-        std::cerr << "[ERROR] Failed to configure camera\n";
+        log(LogLevel::ERROR, "Failed to configure camera");
         return false;
     }
 
     allocator_ = std::make_unique<FrameBufferAllocator>(camera_);
     for (StreamConfiguration &cfg : *config_)
         if (allocator_->allocate(cfg.stream()) < 0) {
-            std::cerr << "[ERROR] Failed to allocate buffers\n";
+            log(LogLevel::ERROR, "Failed to allocate buffers");
             return false;
         }
 
@@ -56,17 +58,20 @@ bool LibcameraCamera::initialize() {
 
     camera_->requestCompleted.connect(this, &LibcameraCamera::requestComplete);
     if (camera_->start()) {
-        std::cerr << "[ERROR] Failed to start camera\n";
+        log(LogLevel::ERROR, "Failed to start camera");
         return false;
     }
 
     for (auto &req : requests_) camera_->queueRequest(req.get());
+    log(LogLevel::INFO, "Camera started successfully");
     return true;
 }
 
 void LibcameraCamera::requestComplete(Request *request) {
     if (request->status() == Request::RequestCancelled)
         return;
+
+    ScopedTimer timer("Frame Processing");
 
     for (auto &[stream, buffer] : request->buffers()) {
         const FrameMetadata &metadata = buffer->metadata();
@@ -80,13 +85,17 @@ void LibcameraCamera::requestComplete(Request *request) {
             cv::imshow("Frame", bgr);
             cv::waitKey(1);
             munmap(mem, plane.length);
+        } else {
+            log(LogLevel::ERROR, "Failed to mmap buffer");
         }
     }
     camera_->queueRequest(request);
 }
 
 void LibcameraCamera::shutdown() {
+    log(LogLevel::INFO, "Shutting down camera");
     camera_->stop();
     camera_->release();
     cameraManager_->stop();
 }
+
