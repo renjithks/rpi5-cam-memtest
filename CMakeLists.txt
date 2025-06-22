@@ -11,7 +11,7 @@ include_directories(
 )
 
 add_executable(camera_memtest
-    src/main.cpp
+    src/Main.cpp
     src/LibcameraCamera.cpp
 )
 
