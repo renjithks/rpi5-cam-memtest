@@ -16,7 +16,6 @@ add_executable(camera_memtest
     src/LibcameraCamera.cpp
 )
 
-target_link_libraries(camera_memtest
-    ${OpenCV_LIBS}
-    libcamera
-)
+find_library(LIBCAMERA_LIB camera)
+target_link_libraries(camera_memtest ${LIBCAMERA_LIB})
+
