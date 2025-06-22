@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include_directories(include)
 
 add_executable(camera_memtest
-    src/main.cpp
+    src/Main.cpp
     src/OpenCVCamera.cpp
     src/FrameProcessor.cpp
     src/MemoryManager.cpp
