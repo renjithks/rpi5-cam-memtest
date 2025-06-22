@@ -1,74 +1,59 @@
 #include "LibcameraCamera.hpp"
 #include "Logger.hpp"
 #include "Profiler.hpp"
+#include <libcamera/control_ids.h>
+#include <libcamera/formats.h>
+#include <libcamera/base/log.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <cstring>
 
 using namespace libcamera;
 
 bool LibcameraCamera::initialize() {
-    ScopedTimer initTimer("Camera Initialization");
+    ScopedTimer timer("Camera Initialization");
+
     cameraManager_ = std::make_unique<CameraManager>();
-    if (cameraManager_->start()) {
-        log(LogLevel::ERROR, "Failed to start CameraManager");
-        return false;
-    }
+    cameraManager_->start();
 
     if (cameraManager_->cameras().empty()) {
-        log(LogLevel::ERROR, "No cameras found");
+        log(LogLevel::ERROR, "No camera found");
         return false;
     }
 
     camera_ = cameraManager_->cameras()[0];
-    if (camera_->acquire()) {
-        log(LogLevel::ERROR, "Failed to acquire camera");
-        return false;
-    }
+    camera_->acquire();
 
     config_ = camera_->generateConfiguration({ StreamRole::Viewfinder });
-    if (!config_) {
-        log(LogLevel::ERROR, "Failed to generate camera configuration");
-        return false;
-    }
-
-    CameraConfiguration::Status validation = config_->validate();
-    if (validation == CameraConfiguration::Invalid) {
-        log(LogLevel::ERROR, "Invalid camera configuration");
-        return false;
-    }
     config_->at(0).pixelFormat = formats::YUV420;
-    config_->at(0).size = {640, 480};
-
-    if (camera_->configure(config_.get()) < 0) {
-        log(LogLevel::ERROR, "Camera configuration failed");
-        return false;
-    }
+    config_->at(0).size.width = 640;
+    config_->at(0).size.height = 480;
+    config_->validate();
+    camera_->configure(config_.get());
 
     allocator_ = std::make_unique<FrameBufferAllocator>(camera_);
-    StreamConfiguration &cfg = config_->at(0);
-    if (allocator_->allocate(cfg.stream()) < 0) {
+    Stream *stream = config_->at(0).stream();
+    if (allocator_->allocate(stream) < 0) {
         log(LogLevel::ERROR, "Failed to allocate buffers");
         return false;
     }
 
-    for (std::unique_ptr<FrameBuffer> &buffer : allocator_->buffers(cfg.stream())) {
+    for (const std::unique_ptr<FrameBuffer> &buffer : allocator_->buffers(stream)) {
         std::unique_ptr<Request> request = camera_->createRequest();
         if (!request) {
             log(LogLevel::ERROR, "Failed to create request");
-            return false;
+            continue;
         }
-        if (request->addBuffer(cfg.stream(), buffer.get()) < 0) {
-            log(LogLevel::ERROR, "Failed to add buffer to request");
-            return false;
+        if (request->addBuffer(stream, buffer.get()) < 0) {
+            log(LogLevel::ERROR, "Failed to attach buffer to request");
+            continue;
         }
         requests_.push_back(std::move(request));
     }
 
     camera_->requestCompleted.connect(this, &LibcameraCamera::requestComplete);
 
-    if (camera_->start()) {
-        log(LogLevel::ERROR, "Failed to start camera");
-        return false;
-    }
-
+    camera_->start();
     for (auto &req : requests_)
         camera_->queueRequest(req.get());
 
@@ -77,15 +62,47 @@ bool LibcameraCamera::initialize() {
 }
 
 bool LibcameraCamera::captureFrame(cv::Mat &output) {
-    // Placeholder
+    ScopedTimer timer("Frame Processing");
+    std::unique_lock<std::mutex> lock(frameMutex_);
+    frameCondVar_.wait(lock, [this] { return frameReady_; });
+    output = latestFrame_.clone();
+    frameReady_ = false;
     return true;
 }
 
-void LibcameraCamera::requestComplete(Request *request) {
-    // Placeholder
+void LibcameraCamera::shutdown() {
+    log(LogLevel::INFO, "Shutting down camera");
+    camera_->stop();
+    camera_->release();
+    cameraManager_->stop();
+    log(LogLevel::INFO, "Camera shutdown completed.");
 }
 
-void LibcameraCamera::shutdown() {
-    if (camera_) camera_->stop();
-    if (cameraManager_) cameraManager_->stop();
+void LibcameraCamera::requestComplete(Request *request) {
+    if (request->status() == Request::RequestCancelled)
+        return;
+
+    const std::map<Stream *, FrameBuffer *> &buffers = request->buffers();
+    for (auto &[stream, buffer] : buffers) {
+        if (buffer->planes().empty()) continue;
+        const FrameBuffer::Plane &plane = buffer->planes()[0];
+
+        void *memory = mmap(nullptr, plane.length, PROT_READ, MAP_SHARED, plane.fd.get(), 0);
+        if (memory == MAP_FAILED) continue;
+
+        cv::Mat yuv(480 + 480 / 2, 640, CV_8UC1, memory);
+        cv::Mat bgr;
+        cv::cvtColor(yuv, bgr, cv::COLOR_YUV2BGR_I420);
+
+        {
+            std::lock_guard<std::mutex> lock(frameMutex_);
+            latestFrame_ = bgr.clone();
+            frameReady_ = true;
+        }
+        frameCondVar_.notify_one();
+
+        munmap(memory, plane.length);
+    }
+
+    camera_->queueRequest(request);
 }
