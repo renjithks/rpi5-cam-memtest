@@ -45,3 +45,4 @@ int main() {
     camera.close();
     csvLog.close();
     return 0;
+}
