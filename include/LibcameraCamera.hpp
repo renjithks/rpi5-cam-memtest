@@ -1,6 +1,7 @@
 // File: include/LibcameraCamera.hpp
 #pragma once
 #include <libcamera/libcamera.h>
+#include <opencv2/opencv.hpp>
 #include <memory>
 #include <vector>
 
