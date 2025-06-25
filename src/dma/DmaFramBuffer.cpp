@@ -1,4 +1,4 @@
-#include "DmaFrameBuffer.h"
+#include "DmaFrameBuffer.hpp"
 
 DmaFrameBuffer::DmaFrameBuffer(DmaBufferPtr dmaBuffer, 
                                const libcamera::StreamConfiguration& config)

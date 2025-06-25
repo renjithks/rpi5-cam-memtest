@@ -1,4 +1,4 @@
-#include "DmaBuffer.h"
+#include "DmaBuffer.hpp"
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>

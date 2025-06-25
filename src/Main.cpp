@@ -1,4 +1,4 @@
-#include "camera/CameraDmaManager.h"
+#include "camera/CameraDmaManager.hpp"
 #include <iostream>
 #include <chrono>
 #include <thread>

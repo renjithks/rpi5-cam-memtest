@@ -1,8 +1,8 @@
 #pragma once
 #include <libcamera/libcamera.h>
-#include "../dma/DmaBuffer.h"
-#include "../dma/DmaFrameBuffer.h"
-#include "../monitoring/MemoryMonitor.h"
+#include "../dma/DmaBuffer.hpp"
+#include "../dma/DmaFrameBuffer.hpp"
+#include "../monitoring/MemoryMonitor.hpp"
 #include <atomic>
 #include <memory>
 #include <vector>

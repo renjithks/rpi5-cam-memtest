@@ -1,5 +1,5 @@
 #pragma once
-#include "DmaBuffer.h"
+#include "DmaBuffer.hpp"
 #include <libcamera/libcamera.h>
 
 class DmaFrameBuffer {
