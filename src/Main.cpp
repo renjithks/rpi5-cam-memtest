@@ -1,31 +1,30 @@
-#include "LibcameraCamera.hpp"
-#include "Logger.hpp"
-#include <csignal>
+#include "camera/CameraDmaManager.h"
 #include <iostream>
+#include <chrono>
 #include <thread>
 
-LibcameraCamera camera;
-bool running = true;
-
-void signalHandler(int signum) {
-    log(LogLevel::INFO, "Interrupt signal received. Exiting...");
-    running = false;
-}
-
 int main() {
-    signal(SIGINT, signalHandler);
-
-    if (!camera.initialize()) {
-        log(LogLevel::ERROR, "Camera initialization failed");
-        return -1;
+    try {
+        CameraDmaManager manager;
+        
+        // Test configuration
+        libcamera::Size resolution(1920, 1080);
+        
+        manager.configureCamera(
+            resolution, 
+            DmaBufferFactory::AllocationPolicy::ALIGNED_1M,
+            12  // Buffer count
+        );
+        
+        manager.startCapture();
+        
+        // Run for 1 hour
+        std::this_thread::sleep_for(std::chrono::hours(1));
+        
+        manager.stopCapture();
+    } catch (const std::exception& e) {
+        std::cerr << "Fatal error: " << e.what() << std::endl;
+        return 1;
     }
-
-    log(LogLevel::INFO, "Camera initialized. Press Ctrl+C to exit.");
-    while (running) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-
-    camera.shutdown();
-    log(LogLevel::INFO, "Camera shutdown completed.");
     return 0;
 }
