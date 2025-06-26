@@ -30,6 +30,7 @@ private:
     void logFrameTime(unsigned frameCount);
     void reportStatistics(std::chrono::steady_clock::time_point start, 
                           unsigned frames);
+    void handleRequestComplete(libcamera::Request *request);;
     
     std::unique_ptr<DmaBufferFactory> factory_;
     libcamera::CameraManager manager_;
