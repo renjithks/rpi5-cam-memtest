@@ -8,6 +8,8 @@
 #include <vector>
 #include <thread>
 #include <random>
+#include <mutex>
+#include <condition_variable>
 
 class CameraDmaManager {
 public:
