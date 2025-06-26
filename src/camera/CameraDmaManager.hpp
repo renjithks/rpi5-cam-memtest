@@ -34,6 +34,9 @@ private:
     std::unique_ptr<libcamera::CameraConfiguration> config_;
     std::vector<std::unique_ptr<DmaFrameBuffer>> buffers_;
     std::vector<std::unique_ptr<libcamera::Request>> requests_;
+    std::queue<libcamera::Request *> completedRequests_;
+    std::mutex queueMutex_;
+    std::condition_variable queueCond_;
     std::atomic<bool> stop_{false};
     std::thread captureThread_;
 };

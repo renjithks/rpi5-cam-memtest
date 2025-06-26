@@ -43,6 +43,8 @@ void CameraDmaManager::configureCamera(const libcamera::Size& size,
 }
 
 void CameraDmaManager::startCapture() {
+
+    camera_->requestCompleted.connect(this, &CameraDmaManager::handleRequestComplete);
     stop_ = false;
     camera_->start();
     
@@ -84,27 +86,45 @@ void CameraDmaManager::stopCapture() {
 void CameraDmaManager::runCaptureLoop() {
     unsigned frameCount = 0;
     auto startTime = std::chrono::steady_clock::now();
-    
+
     while (!stop_) {
-        auto request = camera_->waitForCompletedRequest();
+        libcamera::Request *request = nullptr;
+
+        // Wait for completed request
+        {
+            std::unique_lock<std::mutex> lock(queueMutex_);
+            queueCond_.wait(lock, [this]() { return !completedRequests_.empty() || stop_; });
+
+            if (stop_) break;
+
+            request = completedRequests_.front();
+            completedRequests_.pop();
+        }
+
         frameCount++;
-        
+
         auto frameBuffer = buffers_[request->cookie()];
         frameBuffer->dmaBuffer()->sync(true);
-        
+
         simulateProcessing();
-        
+
         frameBuffer->dmaBuffer()->sync(false);
-        
+
         request->reuse(libcamera::Request::ReuseBuffers);
         camera_->queueRequest(request);
-        
+
         if (frameCount % 100 == 0) {
             logFrameTime(frameCount);
         }
     }
-    
+
     reportStatistics(startTime, frameCount);
+}
+
+void CameraDmaManager::handleRequestComplete(libcamera::Request *request) {
+    std::lock_guard<std::mutex> lock(queueMutex_);
+    completedRequests_.push(request);
+    queueCond_.notify_one();
 }
 
 void CameraDmaManager::simulateProcessing() {
